@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -9,19 +8,29 @@ import (
 	"syscall"
 )
 
+var cfg Config
+
 func main() {
 	c, err := LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Starting service...")
+	if err := validateConfig(c); err != nil {
+		log.Fatal(err)
+	}
 
-	laddr, err := net.ResolveTCPAddr("tcp", c.LocalAddress)
+	cfg = c
+
+	connReg := NewConnectionRegister()
+
+	log.Println("Starting service...")
+
+	laddr, err := net.ResolveTCPAddr("tcp", cfg.LocalAddress)
 	if err != nil {
 		log.Fatalf("Failed to resolve local address: %s", err)
 	}
-	raddr, err := net.ResolveTCPAddr("tcp", c.RemoteAddress)
+	raddr, err := net.ResolveTCPAddr("tcp", cfg.RemoteAddress)
 	if err != nil {
 		log.Fatalf("Failed to resolve remote address: %s", err)
 	}
@@ -39,10 +48,9 @@ func main() {
 			log.Printf("Accept stopped: %s", err)
 			break
 		}
-
-		p := New(conn, laddr, raddr)
-
-		go p.start()
+		remoteIP := net.IP(conn.RemoteAddr().(*net.TCPAddr).IP)
+		p := NewProxy(remoteIP, conn, laddr, raddr)
+		go p.start(connReg)
 	}
 
 }
