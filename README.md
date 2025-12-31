@@ -1,18 +1,22 @@
-# TCP Database Access Firewall
+# Database Firewall
 
-## TODO
+## Implemented
 
-- [x] TCP proxy (protocol-agnostic)
-- [ ] Forward traffic between client and upstream database
-- [ ] Max concurrent connections (global + per-IP)
-- [ ] Connection rate limiting (new connections/sec per IP)
-- [ ] Idle connection timeout
-- [ ] Hard connection lifetime limit (optional cap)
-- [ ] Graceful connection teardown and cleanup
-- [ ] Structured logging (connection open/close, allow/deny)
-- Metrics:
-  - [ ] active connections
-  - [ ] connections accepted / rejected
-  - [ ]bytes in / out
-- [ ] YAML-based static configuration
-- [ ] Deterministic startup failure on invalid config
+- Generic TCP listener (protocol-agnostic)
+- Accept loop with one proxy instance per connection
+- Bidirectional byte-for-byte forwarding (client ↔ upstream)
+- Coordinated teardown on first read/write failure
+- Graceful shutdown on `SIGINT` / `SIGTERM`
+- Static configuration via YAML
+
+## Next
+
+- Active connection tracking
+- Global / per-IP connection limits
+- Idle connection timeouts
+- Structured connection lifecycle logging
+- In-memory metrics (connections, bytes in/out)
+
+## Blogs
+[Part 1](https://medium.com/@promariddhi/building-a-database-firewall-part-1-tcp-proxy-4134026ef739)
+

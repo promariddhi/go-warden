@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
-
-	"github.com/goccy/go-yaml"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -18,90 +17,41 @@ func main() {
 
 	fmt.Println("Starting service...")
 
-	if c.LocalAddress == "" {
-		log.Fatal("Local Address must be defined")
-	}
-
-	if c.RemoteAddress == "" {
-		log.Fatal("Remote Address must be defined")
-	}
-
-	ln, err := net.Listen("tcp", c.LocalAddress)
+	laddr, err := net.ResolveTCPAddr("tcp", c.LocalAddress)
 	if err != nil {
-		log.Fatal("Server could not be started")
+		log.Fatalf("Failed to resolve local address: %s", err)
+	}
+	raddr, err := net.ResolveTCPAddr("tcp", c.RemoteAddress)
+	if err != nil {
+		log.Fatalf("Failed to resolve remote address: %s", err)
 	}
 
-	defer func() {
-		_ = ln.Close()
-	}()
+	ln, err := net.ListenTCP("tcp", laddr)
+	if err != nil {
+		log.Fatalf("Failed to open local port to listen: %s", err)
+	}
+
+	go handleShutdown(ln)
 
 	for {
-		conn, err := ln.Accept()
+		conn, err := ln.AcceptTCP()
 		if err != nil {
-			fmt.Println("Connection refused")
-			fmt.Printf("Error trace: %s", err)
-			continue
+			log.Printf("Accept stopped: %s", err)
+			break
 		}
 
-		go func() {
-			err := HandleConnection(conn, c.RemoteAddress)
-			if err != nil {
-				fmt.Println("Request denied")
-				fmt.Printf("Error trace: %s", err)
-			}
-		}()
+		p := New(conn, laddr, raddr)
+
+		go p.start()
 	}
-}
-
-func HandleConnection(local net.Conn, remoteAddress string) error {
-	fmt.Printf("forwarding request to %s\n", remoteAddress)
-	remote, err := net.Dial("tcp", remoteAddress)
-	if err != nil {
-		return err
-	}
-
-	go func() error {
-		return Copier(local, remote)
-	}()
-
-	go func() error {
-		return Copier(remote, local)
-	}()
-
-	return nil
-}
-
-func Copier(w io.Writer, r io.Reader) error {
-	_, err := io.Copy(w, r)
-	return err
-}
-
-func LoadConfig() (Config, error) {
-	config, err := os.Open("config.yml")
-	if err != nil {
-		return Config{}, err
-	}
-
-	defer func() {
-		_ = config.Close()
-	}()
-
-	config_b, err := io.ReadAll(config)
-	if err != nil {
-		return Config{}, err
-	}
-
-	c := Config{}
-
-	if err := yaml.Unmarshal(config_b, &c); err != nil {
-		return Config{}, err
-	}
-
-	return c, nil
 
 }
 
-type Config struct {
-	LocalAddress  string `yaml:"local_address"`
-	RemoteAddress string `yaml:"remote_address"`
+func handleShutdown(ln *net.TCPListener) {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, os.Interrupt)
+
+	<-sig
+	log.Println("Shutting down...")
+	ln.Close()
 }
