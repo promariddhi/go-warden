@@ -13,10 +13,11 @@
 - Idle connection timeouts
 - Structured connection lifecycle logging
 - In-memory metrics (connections, bytes in/out)
+- Connection Rate limiting (Token Bucket Algorithm)
 
 ## Next
-- Connection Rate limiting (Token Bucket Algorithm)
 - Graceful connection teardown
+- Hard connection lifetime cap
 
 ## Blogs
 [Part 1](https://medium.com/@promariddhi/building-a-database-firewall-part-1-tcp-proxy-4134026ef739)
