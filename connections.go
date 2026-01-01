@@ -20,21 +20,35 @@ func NewConnectionRegister() *ConnectionRegister {
 	}
 }
 
-func (r *ConnectionRegister) Register(ip net.IP) bool {
+func (r *ConnectionRegister) TryRegister(ip net.IP) (bool, string) {
+	key := ip.String()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.canAccept(ip) {
+
+	if r.ActiveConnections >= cfg.ConnectionLimit {
 		r.ConnectionsRejected += 1
-		return false
+		return false, "connection_limit"
 	}
-	r.ActiveConnections += 1
+
+	if r.ConnectionsByIP[key] >= cfg.PerIPConnectionLimit {
+		r.ConnectionsRejected += 1
+		return false, "per_ip_limit"
+	}
+
 	r.ConnectionsAccepted += 1
+	return true, ""
+}
+
+func (r *ConnectionRegister) Register(ip net.IP) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ActiveConnections += 1
 	ct, ok := r.ConnectionsByIP[ip.String()]
 	if !ok {
 		ct = 0
 	}
 	r.ConnectionsByIP[ip.String()] = ct + 1
-	return true
 }
 
 func (r *ConnectionRegister) Unregister(ip net.IP) {
@@ -52,10 +66,9 @@ func (r *ConnectionRegister) Unregister(ip net.IP) {
 	r.ConnectionsByIP[ip.String()] = ct - 1
 }
 
-func (r *ConnectionRegister) canAccept(ip net.IP) bool {
+func (r *ConnectionRegister) ActiveConnectionsCount() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if r.ActiveConnections < cfg.ConnectionLimit && r.ConnectionsByIP[ip.String()] < cfg.PerIPConnectionLimit {
-		return true
-	}
-	return false
+	return r.ActiveConnections
 }

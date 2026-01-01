@@ -3,3 +3,7 @@ remote_address: localhost:8089
 connection_limit: 5
 per_ip_connection_limit: 1
 idle_timeout_secs: 10
+rate_limiter:
+  token_bucket_limiter:
+    rate: 2
+    capacity: 5

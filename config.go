@@ -10,11 +10,21 @@ import (
 )
 
 type Config struct {
-	LocalAddress         string `yaml:"local_address"`
-	RemoteAddress        string `yaml:"remote_address"`
-	ConnectionLimit      int64  `yaml:"connection_limit"`
-	PerIPConnectionLimit int64  `yaml:"per_ip_connection_limit"`
-	IdleTimeoutSeconds   int64  `yaml:"idle_timeout_secs"`
+	LocalAddress         string       `yaml:"local_address"`
+	RemoteAddress        string       `yaml:"remote_address"`
+	ConnectionLimit      int64        `yaml:"connection_limit"`
+	PerIPConnectionLimit int64        `yaml:"per_ip_connection_limit"`
+	IdleTimeoutSeconds   int64        `yaml:"idle_timeout_secs"`
+	RateLimiter          RateLimiterC `yaml:"rate_limiter"`
+}
+
+type RateLimiterC struct {
+	TokenBucketLimiter TokenBucketLimiterC `yaml:"token_bucket_limiter"`
+}
+
+type TokenBucketLimiterC struct {
+	Rate     int64 `yaml:"rate"`
+	Capacity int64 `yaml:"capacity"`
 }
 
 func LoadConfig() (Config, error) {
