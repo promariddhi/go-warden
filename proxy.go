@@ -36,21 +36,8 @@ func (p *Proxy) start(r *ConnectionRegister) {
 	log.Printf("Connecting to %s...", p.raddr)
 
 	//--------------registration logic-----------------
-	ok := r.Register(p.ip)
-	if !ok {
-		p.rconn.Close()
-		logEvent("WARN", "connection_rejected", map[string]any{
-			"client_ip": p.ip.String(),
-			"reason":    "per_ip_limit",
-		})
-		return
-	} else {
-		logEvent("INFO", "connection_accepted", map[string]any{
-			"client_ip":          p.ip.String(),
-			"active_connections": r.ActiveConnections,
-		})
-		defer r.Unregister(p.ip)
-	}
+	r.Register(p.ip)
+	defer r.Unregister(p.ip)
 
 	//----------setting  idle timeout------------------
 	if cfg.IdleTimeoutSeconds > 0 {

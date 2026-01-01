@@ -23,6 +23,11 @@ func main() {
 	cfg = c
 
 	connReg := NewConnectionRegister()
+	rateLimiter := NewTokenBucketLimiter()
+	admissionController := AdmissionController{
+		rateLimiter: rateLimiter,
+		connReg:     connReg,
+	}
 
 	log.Println("Starting service...")
 
@@ -49,8 +54,21 @@ func main() {
 			break
 		}
 		remoteIP := net.IP(conn.RemoteAddr().(*net.TCPAddr).IP)
-		p := NewProxy(remoteIP, conn, laddr, raddr)
-		go p.start(connReg)
+		ok, msg := admissionController.Admit(remoteIP)
+		if !ok {
+			conn.Close()
+			logEvent("WARN", "connection_rejected", map[string]any{
+				"client_ip": remoteIP.String(),
+				"reason":    msg,
+			})
+		} else {
+			logEvent("INFO", "connection_accepted", map[string]any{
+				"client_ip":          remoteIP.String(),
+				"active_connections": connReg.ActiveConnectionsCount(),
+			})
+			p := NewProxy(remoteIP, conn, laddr, raddr)
+			go p.start(connReg)
+		}
 	}
 
 }
