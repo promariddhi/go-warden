@@ -1,41 +1,48 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"database_firewall/internal/config"
+	"database_firewall/internal/logging"
+	"database_firewall/internal/proxy"
 )
 
-var cfg Config
+var configFlag = flag.String("config", "", "to set config file path")
 
 func main() {
-	c, err := LoadConfig()
+	flag.Parse()
+
+	c, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := validateConfig(c); err != nil {
+	if err := config.ValidateConfig(c); err != nil {
 		log.Fatal(err)
 	}
 
-	cfg = c
+	pcfg, ccfg, rcfg := c.SplitConfig()
 
-	connReg := NewConnectionRegister()
-	rateLimiter := NewTokenBucketLimiter()
-	admissionController := AdmissionController{
-		rateLimiter: rateLimiter,
-		connReg:     connReg,
+	connReg := proxy.NewConnectionRegister(ccfg)
+	rateLimiter := proxy.NewTokenBucketLimiter(rcfg)
+	admissionController := proxy.AdmissionController{
+		RateLimiter: rateLimiter,
+		ConnReg:     connReg,
 	}
 
 	log.Println("Starting service...")
 
-	laddr, err := net.ResolveTCPAddr("tcp", cfg.LocalAddress)
+	laddr, err := net.ResolveTCPAddr("tcp", pcfg.LocalAddress)
 	if err != nil {
 		log.Fatalf("Failed to resolve local address: %s", err)
 	}
-	raddr, err := net.ResolveTCPAddr("tcp", cfg.RemoteAddress)
+	raddr, err := net.ResolveTCPAddr("tcp", pcfg.RemoteAddress)
 	if err != nil {
 		log.Fatalf("Failed to resolve remote address: %s", err)
 	}
@@ -57,17 +64,17 @@ func main() {
 		ok, msg := admissionController.Admit(remoteIP)
 		if !ok {
 			conn.Close()
-			logEvent("WARN", "connection_rejected", map[string]any{
+			logging.LogEvent("WARN", "connection_rejected", map[string]any{
 				"client_ip": remoteIP.String(),
 				"reason":    msg,
 			})
 		} else {
-			logEvent("INFO", "connection_accepted", map[string]any{
+			logging.LogEvent("INFO", "connection_accepted", map[string]any{
 				"client_ip":          remoteIP.String(),
-				"active_connections": connReg.ActiveConnectionsCount(),
+				"active_connections": connReg.ActiveConnectionsCount() + 1,
 			})
-			p := NewProxy(remoteIP, conn, laddr, raddr)
-			go p.start(connReg)
+			p := proxy.NewProxy(pcfg, remoteIP, conn, laddr, raddr)
+			go p.Start(connReg)
 		}
 	}
 

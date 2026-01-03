@@ -1,12 +1,15 @@
-package main
+package proxy
 
 import (
 	"net"
 	"sync"
+
+	"database_firewall/internal/config"
 )
 
 type ConnectionRegister struct {
 	mu                sync.Mutex
+	cfg               config.ConnectionConfig
 	ActiveConnections int64
 	ConnectionsByIP   map[string]int64
 
@@ -14,8 +17,9 @@ type ConnectionRegister struct {
 	ConnectionsAccepted, ConnectionsRejected int64
 }
 
-func NewConnectionRegister() *ConnectionRegister {
+func NewConnectionRegister(cfg *(config.ConnectionConfig)) *ConnectionRegister {
 	return &ConnectionRegister{
+		cfg:             *cfg,
 		ConnectionsByIP: make(map[string]int64),
 	}
 }
@@ -26,12 +30,12 @@ func (r *ConnectionRegister) TryRegister(ip net.IP) (bool, string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.ActiveConnections >= cfg.ConnectionLimit {
+	if r.ActiveConnections >= r.cfg.ConnectionLimit {
 		r.ConnectionsRejected += 1
 		return false, "connection_limit"
 	}
 
-	if r.ConnectionsByIP[key] >= cfg.PerIPConnectionLimit {
+	if r.ConnectionsByIP[key] >= r.cfg.PerIPConnectionLimit {
 		r.ConnectionsRejected += 1
 		return false, "per_ip_limit"
 	}

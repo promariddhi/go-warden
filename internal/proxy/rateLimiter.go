@@ -1,9 +1,11 @@
-package main
+package proxy
 
 import (
 	"net"
 	"sync"
 	"time"
+
+	"database_firewall/internal/config"
 )
 
 type RateLimiter interface {
@@ -14,6 +16,7 @@ var _ RateLimiter = (*TokenBucketLimiter)(nil)
 
 type TokenBucketLimiter struct {
 	mu       sync.Mutex
+	cfg      config.RateLimiterConfig
 	rate     int64
 	capacity int64
 	buckets  map[string]bucket
@@ -24,8 +27,9 @@ type bucket struct {
 	lastRefill time.Time
 }
 
-func NewTokenBucketLimiter() *TokenBucketLimiter {
+func NewTokenBucketLimiter(cfg *config.RateLimiterConfig) *TokenBucketLimiter {
 	return &TokenBucketLimiter{
+		cfg:      *cfg,
 		rate:     cfg.RateLimiter.TokenBucketLimiter.Rate,
 		capacity: cfg.RateLimiter.TokenBucketLimiter.Capacity,
 		buckets:  make(map[string]bucket),

@@ -1,4 +1,4 @@
-module go_template
+module database_firewall
 
 go 1.25.5
 

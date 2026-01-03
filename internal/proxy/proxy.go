@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"io"
@@ -6,9 +6,13 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"database_firewall/internal/config"
+	"database_firewall/internal/logging"
 )
 
 type Proxy struct {
+	cfg               config.ProxyConfig
 	ip                net.IP
 	laddr, raddr      *net.TCPAddr
 	lconn, rconn      *net.TCPConn
@@ -20,8 +24,9 @@ type Proxy struct {
 	errsig  chan struct{}
 }
 
-func NewProxy(ip net.IP, lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
+func NewProxy(cfg *config.ProxyConfig, ip net.IP, lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 	return &Proxy{
+		cfg:       *cfg,
 		ip:        ip,
 		lconn:     lconn,
 		laddr:     laddr,
@@ -31,20 +36,13 @@ func NewProxy(ip net.IP, lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 	}
 }
 
-func (p *Proxy) start(r *ConnectionRegister) {
+func (p *Proxy) Start(r *ConnectionRegister) {
 	defer p.lconn.Close()
 	log.Printf("Connecting to %s...", p.raddr)
 
 	//--------------registration logic-----------------
 	r.Register(p.ip)
 	defer r.Unregister(p.ip)
-
-	//----------setting  idle timeout------------------
-	if cfg.IdleTimeoutSeconds > 0 {
-		deadline := time.Now().Add(time.Duration(cfg.IdleTimeoutSeconds) * time.Second)
-		p.lconn.SetDeadline(deadline)
-		p.rconn.SetDeadline(deadline)
-	}
 
 	//--------------Dial and copy------------------------
 	var err error
@@ -56,11 +54,18 @@ func (p *Proxy) start(r *ConnectionRegister) {
 
 	defer p.rconn.Close()
 
+	//----------setting  idle timeout------------------
+	if p.cfg.IdleTimeoutSeconds > 0 {
+		deadline := time.Now().Add(time.Duration(p.cfg.IdleTimeoutSeconds) * time.Second)
+		p.lconn.SetDeadline(deadline)
+		p.rconn.SetDeadline(deadline)
+	}
+
 	go p.pipe(p.lconn, p.rconn)
 	go p.pipe(p.rconn, p.lconn)
 
 	<-p.errsig
-	logEvent("INFO", "connection_closed", map[string]any{
+	logging.LogEvent("INFO", "connection_closed", map[string]any{
 		"client_ip":   p.ip.String(),
 		"duration_ms": time.Since(p.startTime),
 		"bytes_in":    p.inBytes,
@@ -93,7 +98,7 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 func (p *Proxy) err(s string, err error) {
 	p.errOnce.Do(func() {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			logEvent("INFO", "connection_closed", map[string]any{
+			logging.LogEvent("INFO", "connection_closed", map[string]any{
 				"client_ip": p.ip.String(),
 				"reason":    "idle_timeout",
 			})
@@ -106,10 +111,10 @@ func (p *Proxy) err(s string, err error) {
 }
 
 func (p *Proxy) refreshDeadline() {
-	if cfg.IdleTimeoutSeconds <= 0 {
+	if p.cfg.IdleTimeoutSeconds <= 0 {
 		return
 	}
-	deadline := time.Now().Add(time.Duration(cfg.IdleTimeoutSeconds) * time.Second)
+	deadline := time.Now().Add(time.Duration(p.cfg.IdleTimeoutSeconds) * time.Second)
 	p.lconn.SetDeadline(deadline)
 	p.rconn.SetDeadline(deadline)
 
