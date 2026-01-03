@@ -1,6 +1,7 @@
-package main
+package config
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -27,8 +28,42 @@ type TokenBucketLimiterC struct {
 	Capacity int64 `yaml:"capacity"`
 }
 
+type ProxyConfig struct {
+	LocalAddress       string
+	RemoteAddress      string
+	IdleTimeoutSeconds int64
+}
+
+type ConnectionConfig struct {
+	ConnectionLimit      int64
+	PerIPConnectionLimit int64
+}
+
+type RateLimiterConfig struct {
+	RateLimiter RateLimiterC
+}
+
+func (c *Config) SplitConfig() (*ProxyConfig, *ConnectionConfig, *RateLimiterConfig) {
+	return &ProxyConfig{
+			LocalAddress:       c.LocalAddress,
+			RemoteAddress:      c.RemoteAddress,
+			IdleTimeoutSeconds: c.IdleTimeoutSeconds,
+		},
+		&ConnectionConfig{
+			ConnectionLimit:      c.ConnectionLimit,
+			PerIPConnectionLimit: c.PerIPConnectionLimit,
+		},
+		&RateLimiterConfig{
+			RateLimiter: c.RateLimiter,
+		}
+}
+
 func LoadConfig() (Config, error) {
-	config, err := os.Open("config.yml")
+	path, err := resolveConfig()
+	if err != nil {
+		return Config{}, err
+	}
+	config, err := os.Open(path)
 	if err != nil {
 		return Config{}, err
 	}
@@ -52,7 +87,28 @@ func LoadConfig() (Config, error) {
 
 }
 
-func validateConfig(cfg Config) error {
+func resolveConfig() (string, error) {
+	if p := flag.Lookup("config"); p != nil {
+		if v := p.Value.String(); v != "" {
+			return v, nil
+		}
+	}
+
+	candidates := []string{
+		"./config.yml",
+		"/etc/db_firewall/config.yml",
+	}
+
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, nil
+		}
+	}
+
+	return "", fmt.Errorf("no config file found")
+}
+
+func ValidateConfig(cfg Config) error {
 	if cfg.LocalAddress == "" {
 		return fmt.Errorf("local_address must be set")
 	}

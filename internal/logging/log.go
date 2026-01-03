@@ -1,4 +1,4 @@
-package main
+package logging
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func logEvent(level, event string, fields map[string]any) {
+func LogEvent(level, event string, fields map[string]any) {
 	var b strings.Builder
 
 	b.WriteString(level)

@@ -1,18 +1,18 @@
-package main
+package proxy
 
 import "net"
 
 type AdmissionController struct {
-	rateLimiter RateLimiter
-	connReg     *ConnectionRegister
+	RateLimiter RateLimiter
+	ConnReg     *ConnectionRegister
 }
 
 func (a *AdmissionController) Admit(ip net.IP) (bool, string) {
-	if a.rateLimiter != nil && !a.rateLimiter.Allow(ip) {
+	if a.RateLimiter != nil && !a.RateLimiter.Allow(ip) {
 		return false, "rate_limit"
 	}
 
-	ok, msg := a.connReg.TryRegister(ip)
+	ok, msg := a.ConnReg.TryRegister(ip)
 	if !ok {
 		return false, msg
 	}
