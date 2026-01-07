@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"database_firewall/internal/config"
@@ -17,7 +18,7 @@ type Proxy struct {
 	laddr, raddr      *net.TCPAddr
 	lconn, rconn      *net.TCPConn
 	startTime         time.Time
-	inBytes, outBytes int
+	inBytes, outBytes int64
 
 	//------error handling--------
 	errOnce sync.Once
@@ -81,7 +82,7 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 			p.err("Read failed: %s\n", err)
 			return
 		}
-		p.inBytes += n
+		atomic.AddInt64(&p.inBytes, int64(n))
 		p.refreshDeadline()
 		b := buff[:n]
 		n, err = dst.Write(b)
@@ -89,7 +90,7 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 			p.err("Write failed: %s\n", err)
 			return
 		}
-		p.outBytes += n
+		atomic.AddInt64(&p.outBytes, int64(n))
 		p.refreshDeadline()
 	}
 }

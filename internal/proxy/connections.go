@@ -40,11 +40,11 @@ func (r *ConnectionRegister) TryRegister(ip net.IP) (bool, string) {
 	}
 
 	r.ConnectionsAccepted += 1
-	r.Register(ip)
+	r.register(ip)
 	return true, ""
 }
 
-func (r *ConnectionRegister) Register(ip net.IP) {
+func (r *ConnectionRegister) register(ip net.IP) {
 	r.ActiveConnections += 1
 	ct, ok := r.ConnectionsByIP[ip.String()]
 	if !ok {
